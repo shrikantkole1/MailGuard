@@ -1,0 +1,165 @@
+# ============================================================================
+# Docker Compose - Local Development Environment
+# ============================================================================
+# This file allows you to run the entire MCP mesh locally for testing
+# before deploying to Archestra's Kubernetes infrastructure.
+# ============================================================================
+
+version: '3.8'
+
+services:
+  
+  # ========================================================================
+  # MCP SERVER: URL Analyzer
+  # ========================================================================
+  url-analyzer:
+    build:
+      context: ../mcp-mesh
+      dockerfile: Dockerfile.url_analyzer
+    container_name: mcp-url-analyzer
+    ports:
+      - "8001:8000"
+    environment:
+      - LOG_LEVEL=INFO
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - mcp-mesh
+  
+  # ========================================================================
+  # MCP SERVER: Domain Reputation
+  # ========================================================================
+  domain-intel:
+    build:
+      context: ../mcp-mesh
+      dockerfile: Dockerfile.domain_intel
+    container_name: mcp-domain-intel
+    ports:
+      - "8002:8000"
+    environment:
+      - LOG_LEVEL=INFO
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - mcp-mesh
+  
+  # ========================================================================
+  # MCP SERVER: File Forensics
+  # ========================================================================
+  file-forensics:
+    build:
+      context: ../mcp-mesh
+      dockerfile: Dockerfile.file_forensics
+    container_name: mcp-file-forensics
+    ports:
+      - "8003:8000"
+    environment:
+      - LOG_LEVEL=INFO
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - mcp-mesh
+  
+  # ========================================================================
+  # MCP SERVER: SOC Actions
+  # ========================================================================
+  soc-actions:
+    build:
+      context: ../mcp-mesh
+      dockerfile: Dockerfile.soc_actions
+    container_name: mcp-soc-actions
+    ports:
+      - "8004:8000"
+    environment:
+      - LOG_LEVEL=INFO
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+      - REQUIRE_APPROVAL=true  # Enable governance
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - mcp-mesh
+  
+  # ========================================================================
+  # AGENT: Security Triage Agent (Pydantic AI)
+  # ========================================================================
+  security-agent:
+    build:
+      context: ../agent
+      dockerfile: Dockerfile
+    container_name: security-agent
+    ports:
+      - "8080:8080"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - MCP_URL_ANALYZER=http://url-analyzer:8000
+      - MCP_DOMAIN_INTEL=http://domain-intel:8000
+      - MCP_FILE_FORENSICS=http://file-forensics:8000
+      - MCP_SOC_ACTIONS=http://soc-actions:8000
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+    depends_on:
+      - url-analyzer
+      - domain-intel
+      - file-forensics
+      - soc-actions
+    networks:
+      - mcp-mesh
+  
+  # ========================================================================
+  # OBSERVABILITY: OpenTelemetry Collector
+  # ========================================================================
+  otel-collector:
+    image: otel/opentelemetry-collector:latest
+    container_name: otel-collector
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
+    ports:
+      - "4317:4317"  # OTLP gRPC receiver
+      - "4318:4318"  # OTLP HTTP receiver
+      - "55679:55679"  # zpages (observability)
+    networks:
+      - mcp-mesh
+  
+  # ========================================================================
+  # OBSERVABILITY: Jaeger (Trace Visualization)
+  # ========================================================================
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: jaeger
+    ports:
+      - "16686:16686"  # Jaeger UI
+      - "14250:14250"  # Jaeger gRPC
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    networks:
+      - mcp-mesh
+
+# ============================================================================
+# NETWORKS
+# ============================================================================
+networks:
+  mcp-mesh:
+    driver: bridge
+    name: email-triage-network
+
+# ============================================================================
+# VOLUMES (For Persistent Data)
+# ============================================================================
+volumes:
+  audit-logs:
+    name: email-triage-audit-logs

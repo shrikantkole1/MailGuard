@@ -1,0 +1,388 @@
+# ============================================================================
+# ARCHESTRA AI PLATFORM CONFIGURATION
+# ============================================================================
+# This configuration demonstrates Archestra's governance, orchestration,
+# and observability capabilities for the Email Threat Triage Platform.
+#
+# 🎯 Purpose: Show judges how Archestra manages AI agent infrastructure
+# ============================================================================
+
+version: "1.0"
+platform: archestra-ai
+
+# ============================================================================
+# PROJECT METADATA
+# ============================================================================
+project:
+  name: "email-threat-triage"
+  description: "Autonomous Email Security Analysis Platform"
+  owner: "security-engineering@company.com"
+  environment: "production"  # Options: dev, staging, production
+  tags:
+    - security
+    - email-analysis
+    - threat-intelligence
+    - mcp-native
+
+# ============================================================================
+# MCP SERVER REGISTRY
+# ============================================================================
+# Define all MCP tool servers that Archestra will orchestrate
+mcp_servers:
+  
+  # URL Analysis Server
+  url_analyzer:
+    name: "URL Analyzer"
+    description: "Extracts and analyzes URLs for phishing indicators"
+    image: "email-triage/url-analyzer:latest"
+    port: 8001
+    health_check:
+      path: "/health"
+      interval_seconds: 30
+    resources:
+      cpu_limit: "500m"
+      memory_limit: "512Mi"
+      replicas: 2  # High availability
+    tools:
+      - scan_urls
+    
+  # Domain Reputation Server
+  domain_intel:
+    name: "Domain Reputation Analyzer"
+    description: "Performs sender domain verification and trust analysis"
+    image: "email-triage/domain-intel:latest"
+    port: 8002
+    health_check:
+      path: "/health"
+      interval_seconds: 30
+    resources:
+      cpu_limit: "500m"
+      memory_limit: "512Mi"
+      replicas: 2
+    tools:
+      - check_domain_reputation
+  
+  # File Forensics Server
+  file_forensics:
+    name: "Attachment Risk Analyzer"
+    description: "Analyzes email attachments for malicious indicators"
+    image: "email-triage/file-forensics:latest"
+    port: 8003
+    health_check:
+      path: "/health"
+      interval_seconds: 30
+    resources:
+      cpu_limit: "500m"
+      memory_limit: "512Mi"
+      replicas: 2
+    tools:
+      - analyze_attachments
+  
+  # SOC Actions Server (High-Stakes Tools)
+  soc_actions:
+    name: "SOC Response Actions"
+    description: "Security response automation tools"
+    image: "email-triage/soc-actions:latest"
+    port: 8004
+    health_check:
+      path: "/health"
+      interval_seconds: 30
+    resources:
+      cpu_limit: "250m"
+      memory_limit: "256Mi"
+      replicas: 1
+    tools:
+      - quarantine_user
+      - block_sender_domain
+      - escalate_to_soc
+    
+    # 🔒 HIGH-STAKES GOVERNANCE
+    governance:
+      requires_approval: true
+      approval_roles:
+        - "senior-soc-analyst"
+        - "security-operations-manager"
+      approval_timeout_minutes: 30
+      auto_deny_on_timeout: true
+
+# ============================================================================
+# AGENT CONFIGURATION
+# ============================================================================
+agent:
+  name: "security-triage-agent"
+  model: "openai:gpt-4o"
+  
+  # System Prompt (Can also reference file)
+  system_prompt: |
+    You are an autonomous security triage agent operating within Archestra AI.
+    Analyze suspicious emails using registered MCP tools and produce structured security assessments.
+    
+    RULES:
+    - Parse email input into structured components
+    - Invoke relevant MCP tools dynamically
+    - Aggregate tool outputs
+    - Calculate weighted risk scores
+    - Provide evidence-based recommendations
+    - Maintain full audit trail
+    
+    GOVERNANCE:
+    - Never fabricate evidence
+    - Flag high-stakes actions for human approval
+    - All decisions must be auditable
+  
+  # Structured Output Schema
+  output_schema: "SecurityVerdict"
+  
+  # Tool Access Control
+  allowed_tools:
+    - url_analyzer.scan_urls
+    - domain_intel.check_domain_reputation
+    - file_forensics.analyze_attachments
+    - soc_actions.escalate_to_soc  # Safe action
+    
+    # HIGH-STAKES: Require explicit approval
+    - soc_actions.quarantine_user  # ⚠️ Requires approval
+    - soc_actions.block_sender_domain  # ⚠️ Requires approval
+
+# ============================================================================
+# GOVERNANCE POLICIES
+# ============================================================================
+governance:
+  
+  # Input Guardrails (Prevent Prompt Injection)
+  input_guardrails:
+    enabled: true
+    detect_prompt_injection: true
+    detect_jailbreak_attempts: true
+    max_input_length: 50000  # Characters
+    blocked_patterns:
+      - "ignore previous instructions"
+      - "disregard system prompt"
+      - "you are now in developer mode"
+  
+  # Output Validation
+  output_guardrails:
+    enabled: true
+    require_structured_output: true
+    schema: "SecurityVerdict"
+    reject_invalid_schemas: true
+  
+  # Rate Limiting
+  rate_limits:
+    requests_per_minute: 100
+    requests_per_hour: 1000
+    burst_limit: 20
+  
+  # Access Control (RBAC)
+  access_control:
+    enabled: true
+    roles:
+      
+      # Junior analysts can only read/analyze
+      junior_analyst:
+        permissions:
+          - "analyze_email"
+          - "view_results"
+        restrictions:
+          - cannot: "execute_high_stakes_tools"
+      
+      # Senior analysts can escalate and quarantine
+      senior_analyst:
+        permissions:
+          - "analyze_email"
+          - "view_results"
+          - "escalate_to_soc"
+          - "approve_quarantine"
+        restrictions:
+          - cannot: "block_sender_domain"
+      
+      # Security managers have full access
+      security_manager:
+        permissions:
+          - "*"  # Full access
+  
+  # Audit Logging
+  audit:
+    enabled: true
+    log_all_requests: true
+    log_tool_calls: true
+    log_approvals: true
+    retention_days: 90
+    export_format: "json"
+    export_destination: "s3://security-audit-logs/"
+
+# ============================================================================
+# OBSERVABILITY (OpenTelemetry Integration)
+# ============================================================================
+observability:
+  
+  # Distributed Tracing
+  tracing:
+    enabled: true
+    provider: "opentelemetry"
+    exporter: "otlp"
+    endpoint: "http://otel-collector:4317"
+    sample_rate: 1.0  # 100% sampling for security tracing
+    
+    # Custom trace attributes
+    attributes:
+      service.name: "email-threat-triage"
+      deployment.environment: "production"
+      security.criticality: "high"
+  
+  # Metrics Collection
+  metrics:
+    enabled: true
+    collect_interval_seconds: 15
+    
+    # Key metrics to track
+    tracked_metrics:
+      - agent_requests_total
+      - agent_request_duration_seconds
+      - tool_calls_total
+      - tool_call_duration_seconds
+      - classification_counts  # Safe, Suspicious, Malicious
+      - high_stakes_action_requests
+      - approval_wait_time_seconds
+  
+  # Structured Logging
+  logging:
+    level: "INFO"  # DEBUG, INFO, WARN, ERROR
+    format: "json"
+    include_trace_id: true
+    include_span_id: true
+    
+    # Log destinations
+    outputs:
+      - type: "stdout"
+      - type: "file"
+        path: "/var/log/archestra/email-triage.log"
+        rotation: "daily"
+      - type: "remote"
+        endpoint: "https://logs.archestra.ai/ingest"
+
+# ============================================================================
+# COST MANAGEMENT
+# ============================================================================
+cost_management:
+  
+  # Budget Alerts
+  budgets:
+    daily_limit_usd: 100
+    monthly_limit_usd: 2000
+    alert_threshold_percentage: 80
+    alert_recipients:
+      - "security-ops@company.com"
+      - "finance@company.com"
+  
+  # Cost Tracking
+  tracking:
+    enabled: true
+    track_by:
+      - user
+      - tool
+      - classification
+    
+    # Cost allocation
+    cost_per_request:
+      llm_inference: 0.002  # USD
+      tool_execution: 0.0005  # USD per tool call
+      storage: 0.0001  # USD per result stored
+
+# ============================================================================
+# DEPLOYMENT CONFIGURATION
+# ============================================================================
+deployment:
+  
+  # Kubernetes Native
+  platform: "kubernetes"
+  namespace: "email-security"
+  
+  # Auto-scaling
+  autoscaling:
+    enabled: true
+    min_replicas: 2
+    max_replicas: 10
+    target_cpu_percentage: 70
+    target_memory_percentage: 80
+  
+  # Network Policies
+  network:
+    ingress:
+      enabled: true
+      tls_enabled: true
+      allowed_sources:
+        - "10.0.0.0/8"  # Internal network
+    
+    egress:
+      # Allow outbound to threat intelligence APIs
+      allowed_destinations:
+        - "api.virustotal.com"
+        - "api.threatintel.com"
+  
+  # Secrets Management
+  secrets:
+    provider: "kubernetes-secrets"  # Or: vault, aws-secrets-manager
+    secrets:
+      - name: "OPENAI_API_KEY"
+        key: "openai-key"
+      - name: "THREAT_INTEL_API_KEY"
+        key: "threatintel-key"
+
+# ============================================================================
+# TESTING & VALIDATION
+# ============================================================================
+testing:
+  
+  # Synthetic Test Cases
+  synthetic_tests:
+    enabled: true
+    schedule: "0 */6 * * *"  # Every 6 hours
+    
+    test_scenarios:
+      - name: "Legitimate Email"
+        expected_classification: "safe"
+      
+      - name: "Phishing with Malicious URL"
+        expected_classification: "suspicious"
+      
+      - name: "BEC with Attachment"
+        expected_classification: "malicious"
+  
+  # Canary Deployments
+  canary:
+    enabled: true
+    traffic_percentage: 10  # 10% of traffic to canary
+    success_criteria:
+      error_rate_threshold: 0.01
+      latency_p95_threshold_ms: 500
+
+# ============================================================================
+# INTEGRATION ENDPOINTS
+# ============================================================================
+integrations:
+  
+  # Email Gateway Integration
+  email_gateway:
+    enabled: false  # Mock for demo
+    provider: "proofpoint"  # Or: mimecast, office365
+    webhook_endpoint: "/api/v1/analyze-email"
+  
+  # SIEM Integration
+  siem:
+    enabled: true
+    provider: "splunk"
+    endpoint: "https://siem.company.com/ingest"
+    events:
+      - email_analyzed
+      - threat_detected
+      - action_taken
+  
+  # Ticketing System
+  ticketing:
+    enabled: true
+    provider: "jira"
+    project_key: "SEC"
+    auto_create_tickets_for:
+      - malicious_classification
+      - high_stakes_action_required
