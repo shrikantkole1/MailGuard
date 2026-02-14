@@ -51,18 +51,12 @@ export const handleExport = (verdict: SecurityVerdict | null) => {
 
 export const handleRescan = (
     selectedEmail: any,
-    simulateAnalysis: (emailData: any) => Promise<void>,
+    handleEmailSubmit: (emailData: any) => Promise<void>,
     setIsAnalyzing: (value: boolean) => void
 ) => {
     if (selectedEmail) {
-        setIsAnalyzing(true);
-
-        // Simulate rescan with delay
-        setTimeout(async () => {
-            await simulateAnalysis(selectedEmail);
-            setIsAnalyzing(false);
-            alert('🔄 Email has been rescanned successfully!');
-        }, 2000);
+        // Trigger actual analysis through the backend
+        handleEmailSubmit(selectedEmail);
     } else {
         alert('⚠️ Please select an email to rescan');
     }

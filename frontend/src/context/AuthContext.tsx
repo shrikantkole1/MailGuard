@@ -67,12 +67,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     const logout = async () => {
+        // Clear user from state and localStorage
+        setUser(null);
+        localStorage.removeItem('mailguard_user');
+
         // Ideally call logout endpoint to clear cookie
         // await api.post('/auth/logout'); 
-        // For now, just clear local state as we don't have logout endpoint yet
-        setUser(null);
-        // Force reload to clear any cached states
-        window.location.reload();
+
+        // Reset to landing page without forcing a reload
+        window.location.href = '/';
     };
 
     return (
