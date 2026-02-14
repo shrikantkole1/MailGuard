@@ -28,7 +28,7 @@ export const LoginButton: React.FC = () => {
 
     return (
         <button
-            onClick={login}
+            onClick={() => login()}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-all shadow-lg hover:shadow-blue-500/25 font-medium"
         >
             <LogIn size={18} />
