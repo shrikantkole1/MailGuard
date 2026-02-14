@@ -13,6 +13,7 @@ from enum import Enum
 import asyncio
 from datetime import datetime
 import logging
+import os
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -21,10 +22,23 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Configure CORS for frontend development
+# Configure CORS
+# Allow origins from environment variable (comma-separated) or default to localhost
+allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "")
+origins = [
+    "http://localhost:3000",
+    "http://localhost:5173",
+]
+if allowed_origins_env:
+    origins.extend([origin.strip() for origin in allowed_origins_env.split(",") if origin.strip()])
+
+# If "*" is in the list or env var, allow all (useful for avoiding CORS issues initially)
+if "*" in origins or allowed_origins_env == "*":
+    origins = ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
