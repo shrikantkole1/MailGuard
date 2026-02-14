@@ -59,8 +59,16 @@ app = FastAPI(
 
 
 # ============================================================================
-# HEALTH CHECK
+# ROOT & HEALTH CHECK
 # ============================================================================
+@app.get("/")
+async def root():
+    return {
+        "message": "Welcome to the Email Threat Triage API",
+        "docs": "/docs",
+        "health": "/api/health"
+    }
+
 @app.get("/api/health")
 async def health_check():
     return {"status": "ok", "timestamp": datetime.now().isoformat()}
